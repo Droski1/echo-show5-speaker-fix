@@ -192,3 +192,30 @@ it was wrongly pointed at :8642 (the main agent!). Fixes needed:
 
 Verified: `POST :8647/v1/chat/completions` with the voice key answers with the voice
 persona ("I'm Hermes, your personal AI assistant running on the Echo Show 8.").
+
+## Show onboard control — `show_ctl.py` (2026-09-01)
+
+The agent's (me + the voice profile's) tool for controlling the Show itself:
+
+```
+show_ctl.py alarm <HH:MM> [label]    # device-LOCAL time (24h) — the container is UTC,
+                                     # the old raw-adb path sent container time = alarms
+                                     # fired hours off!
+show_ctl.py timer <minutes> [label]  # DeskClock timer (verified: TIMER_EXPIRED fires)
+show_ctl.py volume [stream] [level]  # alarm|music|system
+show_ctl.py brightness [pct]         # display brightness
+show_ctl.py screen on|off            # wake / sleep
+show_ctl.py media play|pause|next|prev
+show_ctl.py dnd on|off
+show_ctl.py app <package>            # launch
+show_ctl.py say <text>               # speak via the server's piper + push
+show_ctl.py status                   # time/battery/volume/screen/app
+```
+
+Key lessons:
+- **Times MUST be device-local** — `device_time()` reads the Show's clock (`date +%H:%M:%Y:%m:%d`)
+  and the alarm target is computed against it (a past time rolls to tomorrow).
+- **The am start intent MUST be ONE quoted string** passed to `adb shell` — the label
+  needs device-shell quoting (`MESSAGE 'label'` inside the outer quotes); unquoted args
+  make the intent "unable to resolve".
+- The voice profile's system message teaches her the tool (via SSH to hs2).
