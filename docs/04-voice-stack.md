@@ -219,3 +219,31 @@ Key lessons:
   needs device-shell quoting (`MESSAGE 'label'` inside the outer quotes); unquoted args
   make the intent "unable to resolve".
 - The voice profile's system message teaches her the tool (via SSH to hs2).
+
+## BT streaming + mic SIMULTANEOUSLY (2026-09-01) — the gates are dead!
+
+The app previously gated the mic whenever a BT A2DP sink was connected (the "BT speaker
+gate") — the mic died with the music. **FIXED — the mic now streams THROUGH the BT:**
+
+1. **Both gates removed** (MicService.java):
+   - The OUTER gate (before the AudioRecord creation — keyed on the sink connection!)
+     is now an announce-only block: it tells the server the BT state but lets the
+     capture run.
+   - The INNER gate (the mid-capture `rec.stop()` on music) is announce-only too.
+   - The kernel handles play+record simultaneously since the speaker fixes — the
+     gates were broken-amp-era workarounds.
+2. **The AudioRecord is PINNED to the built-in mic** — `AudioRecord.Builder` +
+   `setAudioDevice(TYPE_BUILTIN_MIC)` — without it, the audio policy can pick
+   `AUDIO_DEVICE_NONE` for the input when a BT sink is connected (the input opens
+   against nothing = "mic gated" even with the gates removed).
+3. **A reboot is required** after HAL-poisoning events — the HAL's input routing can
+   wedge in the AUDIO_DEVICE_NONE state and only a reboot clears it (killall
+   mediaserver/audioserver is NOT enough once the policy wedges).
+
+⚠️ **LANDMINE RE-CONFIRMED:** `dumpsys media.audio_flinger` / `dumpsys audio`
+SEGFAULT the HAL on this build (`Device::debug()+46`) — my own "diagnosis" of the
+input device via dumpsys was what wedged the mic mid-debugging! Use logcat/HAL logs
+only. (`/opt/data/echo-show5-speaker-fix/docs/05-landmines.md`)
+
+Verified: after the reboot, `BT streaming ON` announcements fire while the mic peaks
+KEEP FLOWING (16:22:32 announce → 16:22:34 mic peak 1007) — simultaneous works.
