@@ -83,3 +83,32 @@ The AI side (CUDA laptop):
 
 Symptom fingerprint: `voice channel up/down` flapping every ~12s + `HEAL: mic silent NNNNNs`
 in the server log = one of these (or both).
+
+## Adaptive TTS volume (ambient-matched, LOCKED 2026-09-01)
+
+The TTS volume adapts to the room's noise floor (measured by the app's own mic):
+
+```java
+// MicService.java playWav():
+// ambientLevel = rolling average of quiet frames' raw RMS (the room's noise floor)
+float vol = Math.min(1f, Math.max(0.05f, ambientLevel / 11400f));
+track.setVolume(vol);
+```
+
+- Quiet room (raw RMS ~50-100): **5%** (the floor)
+- Noisy room (raw ~2000): ~18%
+- Loud (raw ~5000+): ~44%; 11400+ → 100%
+
+**History (why the floor used to be 85%):** the original formula had a 0.85 floor
+(`max(0.85, ambient/5000)`) as a **workaround for the silent amp** (the MTK HAL seemed
+to "mute below ~0.85" — actually the broken amp). After the speaker fix (kernel
+`6e7d3e33`) the floor was removed and the curve tuned with the user: 0.15→0.10→0.05
+and /4000→/5700→/11400. **5% / /11400 = user-confirmed "Perfect" with headphones
+(2026-09-01).**
+
+Notes:
+- `ambientLevel` is the RAW pre-AGC RMS — the server's RMS display includes its VoiceDSP
+  AGC boost, so the scales differ (~15-40×).
+- The quiet-frame threshold is `raw < 2500` (was `raw < 44` — the room never hit it, so
+  the ambient was stuck at the default). Known refinement: exclude near-zero frames
+  (mic-freeze periods) with a lower bound so the ambient stays honest.
