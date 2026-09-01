@@ -112,3 +112,24 @@ Notes:
 - The quiet-frame threshold is `raw < 2500` (was `raw < 44` — the room never hit it, so
   the ambient was stuck at the default). Known refinement: exclude near-zero frames
   (mic-freeze periods) with a lower bound so the ambient stays honest.
+
+## Mic recovery after TTS (playend — FIXED 2026-09-01)
+
+**Symptom:** after the TTS answered, the mic stayed dead ~30s (and sometimes the app
+self-killed via the wedge counter).
+
+**Root cause:** the server scheduled the post-TTS audio-HAL reset at a fixed
+`call_later(8, ...)` — 8s AFTER the TTS push (a relic of the old app-self-restart
+design). The app re-opened the mic into the still-wedged HAL, retried every 5s, and the
+failure counter escalated to a self-kill.
+
+**Fix (two parts):**
+1. **App** (`MicService.java` playWav finally): sends `{"t":"playend"}` over the WS the
+   moment playback ends; the post-playback retry is 2s (not 5s) for 20s after playback.
+2. **Server** (`show5-server.py`): the `playend` message cancels the 8s fallback and
+   schedules the HAL reset in **1s** (`_schedule_post_tts_reset(1)`); the 8s fallback
+   remains in case the playend is lost.
+
+**Result:** mic back in ~4s (measured: playend 14:25:43 → reset 1s → mic peaks 14:25:47).
+The playend handler calls the module-level `_post_tts_reset` (scope bug fixed: it was
+nested inside the push function and invisible to the voice channel).
