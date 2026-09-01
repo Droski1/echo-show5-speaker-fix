@@ -150,3 +150,25 @@ The evolution: 30s → 4s → **~2s**.
 
 Measured: playend 14:32:23 → mic peaks 14:32:25 — **2 seconds**.
 The 8s reset fallback remains for legacy app builds that don't send playend.
+
+## The 30s stall — playState stuck at PLAYING (FIXED 2026-09-01, measured)
+
+**Symptom:** the mic stalled ~30s after each TTS — the recovery eventually worked but
+way too late.
+
+**Measurement (1s-resolution capture):** the TTS wav (~3s) finished, but the
+AudioTrack's `playState` stayed at PLAYING — the wait loop
+`while (PLAYING && elapsed < 30000)` spun the **full 30s cap** before the finally ran.
+The playback head position was ALSO unreliable on this MTK HAL (never reached the end,
+never stalled — both break conditions missed).
+
+**Fix:** wait the WAV's actual duration instead of trusting the HAL state:
+```java
+int playMs = (int) (pcmLen * 1000L / (rate * 2)) + 800;   // duration + slack
+while (track.getPlayState() == AudioTrack.PLAYSTATE_PLAYING
+        && System.currentTimeMillis() - playStart < playMs) { sleep(50); }
+```
+
+**Measured after:** playend at ~4s (was 30s), mic back ~2s later, no frozen-watchdog,
+no self-kill. Combined with the pre-stop + playend-cancels-reset, the full loop is:
+TTS → ~4s play → playend → ~2s mic recovery → listening.
