@@ -65,3 +65,21 @@ The AI side (CUDA laptop):
 | Speaker playback (all streams) | MAX98396 amp ← I2S0 ← MTK AFE ← HAL | ✅ fixed 2026-09-01 |
 | Mic capture | TLV320AIC3101 ← I2C ← HAL | ✅ fixed (mic-bias commit) |
 | BT A2DP sink (iPad music) | BT controller → sink → HAL | ⚠️ separate issue: codec negotiation (`Current Codec: None`) |
+
+## ⚠️ Two gotchas that kill the mic (2026-09-01, both hit in one session)
+
+1. **`pm disable-user` (or any disable/enable cycle) STRIPS the app's RECORD_AUDIO grant.**
+   The HAL then refuses the capture with `getInputForAttr permission denied: recording not
+   allowed for uid <uid>` → the app's AudioRecord init fails → the mic is "silent" → the
+   heal watchdog restarts the app in a loop. **Fix: re-grant after any disable:**
+   `adb shell pm grant com.hermes.show5 android.permission.RECORD_AUDIO`
+   (and `SYSTEM_ALERT_WINDOW` for the overlay).
+2. **The app gates the mic while ANY A2DP sink device is CONNECTED** — even idle, with
+   nothing playing. A connected-but-silent phone shows as `BT streaming ON (mic gated)`
+   every 2s in the server log. The server's `BT sink disconnected (pushed to app)` push
+   does NOT override the app's own re-check. **Fix: disconnect the BT device**
+   (`adb shell svc bluetooth disable && sleep 3 && svc bluetooth enable`) or turn BT off
+   on the source device.
+
+Symptom fingerprint: `voice channel up/down` flapping every ~12s + `HEAL: mic silent NNNNNs`
+in the server log = one of these (or both).
