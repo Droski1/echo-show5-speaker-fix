@@ -172,3 +172,23 @@ while (track.getPlayState() == AudioTrack.PLAYSTATE_PLAYING
 **Measured after:** playend at ~4s (was 30s), mic back ~2s later, no frozen-watchdog,
 no self-kill. Combined with the pre-stop + playend-cancels-reset, the full loop is:
 TTS → ~4s play → playend → ~2s mic recovery → listening.
+
+## Voice profile routing (2026-09-01) — ONE Docker, two profiles
+
+The Hermes install runs **two agent profiles in the same Docker** (Prometheus_Dashboard):
+
+| Profile | Gateway | API key | Serves |
+|---|---|---|---|
+| `default` | `:8642` | `prometheus-…` | the main chat agent (this session) |
+| `voice` | **`:8647`** | `98e4eaf6…` (own key) | the Show's voice agent (own SOUL.md, 72 skills, own memory) |
+
+The relay (`relay.py` CFG["gateway"]) must point at **:8647 + the voice key** —
+it was wrongly pointed at :8642 (the main agent!). Fixes needed:
+1. `relay.py` gateway → `http://127.0.0.1:8647/v1/chat/completions`
+2. `~/hermes-relay/gateway_key.json` → the voice profile's key
+3. The voice profile's `.env` was EMPTY ("not configured" → the gateway 500s) — copy the
+   provider keys from the default profile's `.env` + `chown hermes:hermes` + chmod 600 +
+   restart the gateway (`/command/s6-svc -r /run/service/gateway-voice` in the container).
+
+Verified: `POST :8647/v1/chat/completions` with the voice key answers with the voice
+persona ("I'm Hermes, your personal AI assistant running on the Echo Show 8.").
