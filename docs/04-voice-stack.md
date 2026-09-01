@@ -1,0 +1,67 @@
+# 04 — Voice Stack
+
+The full voice-assistant stack: device app → server → relay → AI (STT/LLM/TTS).
+
+## On-device: the HermesOS app (`com.hermes.show5`)
+
+- WebSocket voice client to hs2 (16 kHz mono PCM up, WAV down)
+- Captures the mic continuously; streams frames to the server
+- Plays TTS WAVs via `AudioTrack` (STREAM_ALARM at max volume; ducks STREAM_MUSIC
+  during playback and restores it after)
+- Shows the agent's live state as a UI overlay (reasoning + tool activity)
+- Auto-starts via boot receiver; supervised by `hermeskeep`
+
+## On-device: `hermeskeep` (init service, /data/local/hermeskeep.sh)
+
+A root init service (`hermeskeep`) that re-arms device state every 4 s:
+
+- **App keep-alive** — restarts `com.hermes.show5` the moment it dies
+- **Speaker amps** — `Speaker_Amp_Switch`, `Headset_Speaker_Amp_Switch`,
+  `Audio_Amp_L/R_Switch` On + `Speaker Volume A` 15 (the HAL resets them on every
+  playback; the keeper re-arms them). ⚠️ The real physical gates on this MTK board
+  are `Audio_Amp_L/R_Switch` — the others are NOT sufficient alone.
+- **Wireless adb** — `service.adb.tcp.port=5555` does not reliably survive reboots;
+  the keeper re-enforces it and verifies the actual LISTEN state via `/proc/net/tcp`
+- **ALSA node repair** — recreates `/dev/snd/*` nodes if the boot's udev missed them
+
+⚠️ 2026-09-01: the app-restart block's `killall mediaserver audioserver` was REMOVED —
+it killed the whole audio stack every 4 s whenever the app was intentionally stopped.
+
+## On hs2: `show5-server.py` (`~/show5/`)
+
+The WebSocket bridge + supervisor:
+
+- Serves the device's WS voice channel (`:8794`/`:8792`; the container is
+  host-networked so localhost = hs2)
+- Pushes TTS audio to the device (real path — parse JSON, extract b64)
+- `POST /show5/test/play` — test-tone endpoint (⚠️ was double-wrapping JSON; fixed)
+- Heal watchdog: detects mic-silent / app-dead and restarts the app via adb
+  (⚠️ its `killall mediaserver audioserver` heal also kills active playback — only
+  safe when the app is genuinely wedged)
+
+## On hs2: the relay (`relay.py`, `:8792`)
+
+Bridges the device's voice channel to the Hermes Gateway with instant responses and
+background processing; streams reasoning/tool-progress SSE for the on-screen display.
+
+## On pop-os: `voice.py`
+
+The AI side (CUDA laptop):
+
+- **STT:** faster-whisper (CUDA fp16, ~0.1 s), with VAD + high-pass/normalize pre-STT
+  (distant-speech rumble was causing empty transcripts)
+- **Wake:** fuzzy "hermes" wake word (greeting-gated + blocklist), custom OpenWakeWord
+  option
+- **LLM:** the Hermes Gateway (main agent, `:8642`, deepseek)
+- **TTS:** kokoro (`:8001`, warm GPU ~0.06 s) with piper CPU fallback
+- **ALEXA-MODE:** a client system message makes the agent answer like Alexa — one short
+  sentence, <15 words (the Show display's preferred persona)
+- Logs every utterance to `samples/`
+
+## The audio paths (what plays where)
+
+| Path | Hardware | Status |
+|---|---|---|
+| Speaker playback (all streams) | MAX98396 amp ← I2S0 ← MTK AFE ← HAL | ✅ fixed 2026-09-01 |
+| Mic capture | TLV320AIC3101 ← I2C ← HAL | ✅ fixed (mic-bias commit) |
+| BT A2DP sink (iPad music) | BT controller → sink → HAL | ⚠️ separate issue: codec negotiation (`Current Codec: None`) |
