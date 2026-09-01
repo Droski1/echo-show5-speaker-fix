@@ -1,0 +1,208 @@
+From 72b0243ebbc53f59307aa1536fc7a5cf9a469d63 Mon Sep 17 00:00:00 2001
+From: Droski1 <Droski1@users.noreply.github.com>
+Date: Tue, 1 Sep 2026 02:46:46 +0000
+Subject: [PATCH 1/4] Show 5 speaker fix: verified GLOBAL_EN writes + fresh amp
+ reset at stream init
+
+---
+ sound/soc/codecs/max98396.c | 35 +++++++++++++++++++++++++++++++++--
+ 1 file changed, 33 insertions(+), 2 deletions(-)
+
+diff --git a/sound/soc/codecs/max98396.c b/sound/soc/codecs/max98396.c
+index 4e20c92f..e19ba1d1 100644
+--- a/sound/soc/codecs/max98396.c
++++ b/sound/soc/codecs/max98396.c
+@@ -332,6 +332,18 @@ static int max98396_init_setup(struct snd_soc_component *component)
+ 	if (max98396->init_done)
+ 		return 0;
+ 
++	/* 2026-09-01: fresh hardware reset cycle before the first stream. The
++	 * boot-time reset may have raced I2C bringup, leaving the amp deaf to
++	 * register writes (ACKs but ignores them). A low->high GPIO cycle here
++	 * re-initializes the amp right before we configure it. */
++	if (gpio_is_valid(max98396->reset_gpio)) {
++		gpio_direction_output(max98396->reset_gpio, 0);
++		msleep(50);
++		gpio_direction_output(max98396->reset_gpio, 1);
++		msleep(20);
++		dev_info(component->dev, "%s fresh reset cycle done", __func__);
++	}
++
+ 	#ifdef MAX98396_ENABLE_SW_RESET
+ 	/* Software Reset */
+ 	max98396_reset(max98396, component->dev);
+@@ -611,8 +623,27 @@ static int max98396_dac_event(struct snd_soc_dapm_widget *w,
+ 			MAX98396_R205E_PCM_RX_EN,
+ 			MAX98396_PCM_RX_EN_MASK, 1);
+ 
+-		regmap_write(max98396->regmap,
+-			MAX98396_R210F_GLOBAL_EN, 1);
++		/* 2026-09-01: verified GLOBAL_EN write. The amp was observed to ACK
++		 * writes but keep registers at power-on defaults (GLOBAL_EN stuck 0 =
++		 * output stage disabled = total silence). Log the result + read-back,
++		 * and fall back to the write-only alt register 0x2110 if 0x210F
++		 * does not stick. */
++		{
++			int _r, _v = 0;
++			_r = regmap_write(max98396->regmap,
++				MAX98396_R210F_GLOBAL_EN, 1);
++			regmap_read(max98396->regmap,
++				MAX98396_R210F_GLOBAL_EN, &_v);
++			dev_info(component->dev,
++				"GLOBAL_EN 0x210F write ret=%d readback=%u", _r, _v);
++			if (_r || _v != 1) {
++				_r = regmap_write(max98396->regmap, 0x2110, 1);
++				regmap_read(max98396->regmap,
++					MAX98396_R210F_GLOBAL_EN, &_v);
++				dev_info(component->dev,
++					"GLOBAL_EN alt 0x2110 ret=%d readback=%u", _r, _v);
++			}
++		}
+ 		break;
+ 	case SND_SOC_DAPM_POST_PMD:
+ 		regmap_update_bits(max98396->regmap,
+-- 
+2.47.3
+
+
+From 61422f8548701696a80a51ac4fb73d25791100a0 Mon Sep 17 00:00:00 2001
+From: Droski1 <Droski1@users.noreply.github.com>
+Date: Tue, 1 Sep 2026 18:19:21 +0000
+Subject: [PATCH 2/4] Show 5: full MAX98396 power-up sequence
+ (NOVBAT->SPK_EN->GLOBAL_EN) with verification
+
+---
+ sound/soc/codecs/max98396.c | 36 ++++++++++++++++++++++++------------
+ 1 file changed, 24 insertions(+), 12 deletions(-)
+
+diff --git a/sound/soc/codecs/max98396.c b/sound/soc/codecs/max98396.c
+index e19ba1d1..ab1ea888 100644
+--- a/sound/soc/codecs/max98396.c
++++ b/sound/soc/codecs/max98396.c
+@@ -623,25 +623,37 @@ static int max98396_dac_event(struct snd_soc_dapm_widget *w,
+ 			MAX98396_R205E_PCM_RX_EN,
+ 			MAX98396_PCM_RX_EN_MASK, 1);
+ 
+-		/* 2026-09-01: verified GLOBAL_EN write. The amp was observed to ACK
+-		 * writes but keep registers at power-on defaults (GLOBAL_EN stuck 0 =
+-		 * output stage disabled = total silence). Log the result + read-back,
+-		 * and fall back to the write-only alt register 0x2110 if 0x210F
+-		 * does not stick. */
++		/* 2026-09-01: FULL datasheet power-up sequence (Table 1) with
++		 * verification. The amp was stuck in software shutdown: writes were
++		 * ACK'd but ignored until a fresh reset, then SPK_EN/PCM_RX_EN landed
++		 * but GLOBAL_EN stayed 0 — because NOVBAT (0x20A0) was never applied
++		 * (the board has NO battery; the amp's VBAT UVLO blocks the EN=1
++		 * transition). Sequence: NOVBAT=1 -> SPK_EN=1 -> PCM_RX_EN=1 ->
++		 * GLOBAL_EN=1 LAST, with read-back + retries. */
+ 		{
+-			int _r, _v = 0;
++			int _r, _v = 0, _try;
++			/* 1. NOVBAT=1 — no-battery board (VBAT pin absent) */
+ 			_r = regmap_write(max98396->regmap,
+-				MAX98396_R210F_GLOBAL_EN, 1);
++				MAX98396_R20A0_AMP_SUPPLY_CTL, 1);
+ 			regmap_read(max98396->regmap,
+-				MAX98396_R210F_GLOBAL_EN, &_v);
++				MAX98396_R20A0_AMP_SUPPLY_CTL, &_v);
+ 			dev_info(component->dev,
+-				"GLOBAL_EN 0x210F write ret=%d readback=%u", _r, _v);
+-			if (_r || _v != 1) {
+-				_r = regmap_write(max98396->regmap, 0x2110, 1);
++				"NOVBAT 0x20A0 write ret=%d readback=%u", _r, _v);
++			/* 2. SPK_EN=1 (speaker output enable) */
++			regmap_write(max98396->regmap,
++				MAX98396_R20AF_AMP_EN, 1);
++			/* 3. GLOBAL_EN=1 LAST, retried with verification */
++			for (_try = 0; _try < 3; _try++) {
++				_r = regmap_write(max98396->regmap,
++					MAX98396_R210F_GLOBAL_EN, 1);
+ 				regmap_read(max98396->regmap,
+ 					MAX98396_R210F_GLOBAL_EN, &_v);
+ 				dev_info(component->dev,
+-					"GLOBAL_EN alt 0x2110 ret=%d readback=%u", _r, _v);
++					"GLOBAL_EN 0x210F try%d ret=%d readback=%u",
++					_try, _r, _v);
++				if (!_r && _v == 1)
++					break;
++				usleep_range(5000, 10000);
+ 			}
+ 		}
+ 		break;
+-- 
+2.47.3
+
+
+From aa42ad1d15b7ba8872dd712ce4f6a7e5a7e9089c Mon Sep 17 00:00:00 2001
+From: Droski1 <Droski1@users.noreply.github.com>
+Date: Tue, 1 Sep 2026 18:22:38 +0000
+Subject: [PATCH 3/4] Show 5: keep MAX98396 GLOBAL_EN active across playbacks
+ (re-enable fails)
+
+---
+ sound/soc/codecs/max98396.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/sound/soc/codecs/max98396.c b/sound/soc/codecs/max98396.c
+index ab1ea888..089e005d 100644
+--- a/sound/soc/codecs/max98396.c
++++ b/sound/soc/codecs/max98396.c
+@@ -662,8 +662,10 @@ static int max98396_dac_event(struct snd_soc_dapm_widget *w,
+ 			MAX98396_R205E_PCM_RX_EN,
+ 			MAX98396_PCM_RX_EN_MASK, 0);
+ 
+-		regmap_write(max98396->regmap,
+-			MAX98396_R210F_GLOBAL_EN, 0);
++		/* 2026-09-01: DO NOT write GLOBAL_EN=0 here. The amp refuses to
++		 * re-enter the active state afterwards (EN=1 write is ignored —
++		 * observed: first playback powers up fine, all later ones fail).
++		 * Leave the amp active; the idle draw is negligible. */
+ 		max98396->tdm_mode = false;
+ 		break;
+ 	default:
+-- 
+2.47.3
+
+
+From 6e7d3e3306074001f0e81806bc2123ed1f622cdc Mon Sep 17 00:00:00 2001
+From: Droski1 <Droski1@users.noreply.github.com>
+Date: Tue, 1 Sep 2026 18:28:31 +0000
+Subject: [PATCH 4/4] Show 5: no-op EXTAMP_Select (pin 35 pulse = MAX98396
+ hardware reset on every playback)
+
+---
+ .../soc/mediatek/mt_soc_audio_8163_amzn/AudDrv_Gpio.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/sound/soc/mediatek/mt_soc_audio_8163_amzn/AudDrv_Gpio.c b/sound/soc/mediatek/mt_soc_audio_8163_amzn/AudDrv_Gpio.c
+index d03ff327..b231d256 100644
+--- a/sound/soc/mediatek/mt_soc_audio_8163_amzn/AudDrv_Gpio.c
++++ b/sound/soc/mediatek/mt_soc_audio_8163_amzn/AudDrv_Gpio.c
+@@ -231,6 +231,15 @@ int AudDrv_GPIO_I2S_Select(int bEnable)
+ 
+ int AudDrv_GPIO_EXTAMP_Select(int bEnable)
+ {
++	/* 2026-09-01: NO-OP. Pin 35 (KPROW2) is BOTH the MTK codec's extamp
++	 * control AND the MAX98396 speaker amp's reset (maxim,reset-gpio).
++	 * The codec pulses it low on every speaker-path enable, hardware-
++	 * resetting the amp mid-session (registers clear to defaults, the amp
++	 * refuses to re-enable -> total silence after the first sound). The
++	 * amp's own driver owns the pin now. */
++	(void)bEnable;
++	return 0;
++#if 0
+ 	int retval = 0;
+ 
+ 	pr_debug("%s\n", __func__);
+@@ -259,6 +268,8 @@ int AudDrv_GPIO_EXTAMP_Select(int bEnable)
+ 		}
+ 	}
+ 	return retval;
++#endif
++
+ }
+ 
+ int AudDrv_GPIO_EXTAMP_Gain_Set(int value)
+-- 
+2.47.3
+
