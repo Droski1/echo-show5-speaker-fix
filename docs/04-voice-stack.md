@@ -133,3 +133,20 @@ failure counter escalated to a self-kill.
 **Result:** mic back in ~4s (measured: playend 14:25:43 → reset 1s → mic peaks 14:25:47).
 The playend handler calls the module-level `_post_tts_reset` (scope bug fixed: it was
 nested inside the push function and invisible to the voice channel).
+
+## Mic recovery after TTS — FINAL design (2026-09-01, ~2s recovery)
+
+The evolution: 30s → 4s → **~2s**.
+
+1. **Pre-stop**: `playWav()` stops + releases the recorder BEFORE the playback —
+   the concurrent play+record was what wedged the MTK HAL. No wedge = no recovery cascade.
+2. **playend cancels the HAL reset**: the app sends `{"t":"playend"}` when playback ends;
+   the server cancels the scheduled post-TTS `killall mediaserver audioserver` (the reset
+   was the ~25s delay — the HAL restart outlasted the app's re-open wait, triggering the
+   frozen-watchdog re-open loop). The new app recovers cleanly without any HAL kill.
+3. **2s grace**: the mic thread waits ~2s after the playback ends before re-opening
+   (the HAL needs a moment to release the output), then opens fresh — reads flow
+   immediately.
+
+Measured: playend 14:32:23 → mic peaks 14:32:25 — **2 seconds**.
+The 8s reset fallback remains for legacy app builds that don't send playend.
