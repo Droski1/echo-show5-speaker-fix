@@ -59,6 +59,12 @@
   .sl-row { position: relative; }
   .sl-needle { position: absolute; top: 22px; left: 0%; width: 2px; height: 10px; background: #00ccdd; box-shadow: 0 0 6px #00ccdd; pointer-events: none; z-index: 2; }
   input[type=range] { width: 220px; vertical-align: middle; accent-color: #00ed3f; }
+  .tune-wrap { border: 1px solid var(--dim); margin: 8px 0; padding: 0; background: #050505; }
+  .tune-wrap summary { cursor: pointer; padding: 6px; color: var(--green); font-size: 12px; list-style: none; }
+  .tune-wrap summary::-webkit-details-marker { display: none; }
+  .tune-wrap summary:before { content: '▸ '; }
+  .tune-wrap[open] summary:before { content: '▾ '; }
+  .tune-hint { color: var(--dim); font-size: 9px; }
   .aecpanel { border: 1px solid var(--green); padding: 6px; margin: 8px 0; background: #0a0f0a; }
   .aec-title { color: var(--green); font-size: 12px; margin-bottom: 6px; }
   .aec-row { display: flex; gap: 10px; }
@@ -108,8 +114,10 @@
       <div class="aec-cell"><div class="aec-label">REFERENCE</div><div class="aec-bar"><div class="aec-fill" id="aecreffill"></div></div><div class="aec-val" id="aecrefval">-</div></div>
     </div>
     <div class="aec-sub" id="aecsub">BT: - | duck: - | the AEC cancels RAW - OUT</div>
-    <div class="aecpanel">
-    <div class="aec-title">◉ TUNING SLIDERS <button class="reset-all" onclick="resetAll()">RESET ALL</button></div>
+    <details class="tune-wrap" open>
+  <summary>◉ TUNING SLIDERS <span class="tune-hint">(click to tuck away)</span></summary>
+  <div class="aecpanel">
+    <div class="aec-title">TUNING <button class="reset-all" onclick="resetAll()">RESET ALL</button></div>
     <div class="sl-row" data-k="wake_th"><span class="sl-name">WAKE THRESHOLD</span><input type="range" id="sl-wake" min="0.1" max="0.9" step="0.05" value="0.45" oninput="setTune('wake_th', this.value, this)"><span class="sl-val" id="v-wake">0.45</span><button class="sl-reset" onclick="resetOne('wake_th')">⭯</button><div class="sl-needle" id="n-wake"></div><div class="sl-help">the ONNX wake probability gate — LOWER = wakes on quieter "hermes" (more false hits), HIGHER = stricter</div></div>
     <div class="sl-row" data-k="talk_gate"><span class="sl-name">TALK GATE</span><input type="range" id="sl-talk" min="800" max="6000" step="100" value="2300" oninput="setTune('talk_gate', this.value, this)"><span class="sl-val" id="v-talk">2300</span><button class="sl-reset" onclick="resetOne('talk_gate')">⭯</button><div class="sl-needle" id="n-talk"></div><div class="sl-help">RMS that keeps an utterance alive — LOWER = longer utterances, HIGHER = ends sooner</div></div>
     <div class="sl-row" data-k="vad_on"><span class="sl-name">VAD SENSITIVITY</span><input type="range" id="sl-vad" min="500" max="8000" step="100" value="2500" oninput="setTune('vad_on', this.value, this)"><span class="sl-val" id="v-vad">2500</span><button class="sl-reset" onclick="resetOne('vad_on')">⭯</button><div class="sl-needle" id="n-vad"></div><div class="sl-help">the speech-start RMS — LOWER = the video's audio starts "speech" (bad), HIGHER = only loud clear speech starts</div></div>
@@ -120,6 +128,7 @@
     <div class="sl-row" data-k="duck_ratio"><span class="sl-name">DUCK DEPTH</span><input type="range" id="sl-duck" min="2" max="10" step="1" value="4" oninput="setTune('duck_ratio', this.value, this)"><span class="sl-val" id="v-duck">4</span><button class="sl-reset" onclick="resetOne('duck_ratio')">⭯</button><div class="sl-needle" id="n-duck"></div><div class="sl-help">the music dip on the wake (media vol ÷ this)</div></div>
     <div class="sl-row" data-k="mic_gain"><span class="sl-name">MIC GAIN</span><input type="range" id="sl-gain" min="4" max="128" step="4" value="32" oninput="setTune('mic_gain', this.value, this)"><span class="sl-val" id="v-gain">32</span><button class="sl-reset" onclick="resetOne('mic_gain')">⭯</button><div class="sl-needle" id="n-gain"></div><div class="sl-help">the app's mic amplification — HIGHER = louder to the STT (residual grows too)</div></div>
   </div>
+  </details>
 <div class="grid">
   <div class="panel">
     <h2>◉ LIVE AUDIO — what the alexa hears</h2>
