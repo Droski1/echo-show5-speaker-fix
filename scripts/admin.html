@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HERMES SHOW5 // ADMIN CONSOLE</title>
+<style>
+  :root { --bg:#050505; --green:#00ed3f; --dim:#1d4d2a; --amber:#ffaa00; --blue:#00a2ff;
+          --orange:#ff8800; --red:#ff4444; --text:#9fd9ac; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:ui-monospace,Menlo,Consolas,monospace;
+         font-size:13px; padding:14px; }
+  h1 { color:var(--green); font-size:16px; letter-spacing:2px; text-shadow:0 0 8px var(--green); }
+  h2 { color:var(--green); font-size:12px; letter-spacing:1px; border-bottom:1px solid var(--dim);
+       padding-bottom:4px; margin-bottom:8px; text-shadow:0 0 6px var(--green); }
+  .grid { display:grid; grid-template-columns:1.2fr 1fr; gap:12px; margin-top:12px; }
+  .panel { border:1px solid var(--dim); background:#0a0a0a; padding:10px; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px;
+         background:#333; box-shadow:0 0 6px #333; vertical-align:middle; }
+  .dot.on { background:var(--green); box-shadow:0 0 10px var(--green); animation:pulse 2s infinite; }
+  .dot.blue { background:var(--blue); box-shadow:0 0 10px var(--blue); animation:pulse 1s infinite; }
+  .dot.amber { background:var(--amber); box-shadow:0 0 10px var(--amber); animation:pulse .8s infinite; }
+  .dot.orange { background:var(--orange); box-shadow:0 0 10px var(--orange); animation:pulse .5s infinite; }
+  @keyframes pulse { 50% { opacity:.35; } }
+  #conn { float:right; font-size:11px; margin-top:3px; }
+  #ear { display:inline-block; margin-top:6px; padding:8px 18px; border:1px solid var(--green);
+         color:var(--green); cursor:pointer; letter-spacing:1px; background:#0a1f0e;
+         text-shadow:0 0 6px var(--green); user-select:none; }
+  #ear.live { background:var(--green); color:#000; box-shadow:0 0 18px var(--green); }
+  #wave { width:100%; height:110px; background:#000; border:1px solid var(--dim); margin-top:8px;
+          display:block; }
+  #meterwrap { height:10px; border:1px solid var(--dim); margin-top:6px; background:#000; }
+  #meter { height:100%; width:0%; background:var(--green); box-shadow:0 0 8px var(--green);
+           transition:width .1s; }
+  #rmsnum { float:right; font-size:11px; color:var(--green); }
+  #feed { height:260px; overflow-y:auto; font-size:12px; line-height:1.5; background:#000;
+          border:1px solid var(--dim); padding:6px; }
+  #feed .wake { color:var(--blue); }
+  #feed .you { color:var(--amber); }
+  #feed .hermes { color:var(--green); text-shadow:0 0 5px var(--green); }
+  #feed .err { color:var(--red); }
+  #feed .dim { color:#4f6b56; }
+  #log { height:190px; overflow-y:auto; font-size:11px; line-height:1.45; background:#000;
+         border:1px solid var(--dim); padding:6px; color:#5d8f66; white-space:pre-wrap;
+         word-break:break-all; }
+  .kv { display:grid; grid-template-columns:110px 1fr; gap:3px 8px; font-size:12px; }
+  .kv b { color:var(--green); font-weight:normal; }
+  .kv span { color:var(--text); word-break:break-all; }
+  #statsline { font-size:12px; color:var(--text); line-height:1.7; }
+  #statsline b { color:var(--green); font-weight:normal; }
+  button { background:#0a1f0e; color:var(--green); border:1px solid var(--dim); padding:4px 12px;
+           cursor:pointer; font-family:inherit; font-size:11px; margin-top:6px; }
+  button:hover { border-color:var(--green); box-shadow:0 0 8px var(--green); }
+  .sl-row { margin: 6px 0; }
+  .sl-name { color: var(--green); font-size: 11px; display: inline-block; width: 130px; }
+  .sl-val { color: #00ccdd; font-size: 11px; margin-left: 6px; }
+  .sl-help { color: #7ddb8a; font-size: 9px; margin-top: 2px; }
+  .sl-reset { margin-left: 6px; background: #0a0f0a; color: var(--green); border: 1px solid var(--dim); cursor: pointer; font-size: 10px; }
+  .reset-all { background: #0a0f0a; color: var(--amber); border: 1px solid var(--amber); cursor: pointer; font-size: 10px; float: right; }
+  .sl-row { position: relative; }
+  .sl-needle { position: absolute; top: 22px; left: 0%; width: 2px; height: 10px; background: #00ccdd; box-shadow: 0 0 6px #00ccdd; pointer-events: none; z-index: 2; }
+  input[type=range] { width: 220px; vertical-align: middle; accent-color: #00ed3f; }
+  .aecpanel { border: 1px solid var(--green); padding: 6px; margin: 8px 0; background: #0a0f0a; }
+  .aec-title { color: var(--green); font-size: 12px; margin-bottom: 6px; }
+  .aec-row { display: flex; gap: 10px; }
+  .aec-cell { flex: 1; }
+  .aec-label { color: #7ddb8a; font-size: 10px; margin-bottom: 3px; }
+  .aec-bar { height: 12px; border: 1px solid var(--dim); background: #050505; position: relative; }
+  .aec-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #00ed3f, #00ccdd); transition: width 0.4s; }
+  .aec-val { color: var(--green); font-size: 11px; margin-top: 3px; }
+  .aec-sub { color: var(--amber); font-size: 10px; margin-top: 6px; }
+  .blink { animation:blink 1s step-start infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+  /* ---- AGENT panel ---- */
+  #agent { height:300px; overflow-y:auto; font-size:11px; line-height:1.5; background:#000;
+           border:1px solid var(--dim); padding:6px; }
+  #agent .th { color:var(--amber); border-left:2px solid var(--amber); padding-left:6px;
+               margin:4px 0; white-space:pre-wrap; }
+  #agent .tl { border:1px solid var(--dim); margin:4px 0; padding:4px 6px; }
+  #agent .tl .tlh { color:var(--green); cursor:pointer; user-select:none; }
+  #agent .tl .tlh .st { float:right; }
+  #agent .tl .tld { display:none; color:var(--text); margin-top:3px; white-space:pre-wrap;
+                    word-break:break-all; font-size:10px; }
+  #agent .tl.open .tld { display:block; }
+  #agent .tl.running { border-color:var(--orange); }
+  #agent .tl.done { border-color:var(--green); }
+  #agent .tl.err { border-color:var(--red); }
+  #agent .ans { color:var(--green); text-shadow:0 0 5px var(--green); border-left:2px solid var(--green);
+                padding-left:6px; margin-top:6px; }
+  #agent .run-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;
+                    background:#333; vertical-align:middle; }
+  #agent .run-dot.live { background:var(--orange); box-shadow:0 0 8px var(--orange); animation:pulse .6s infinite; }
+  #stopbtn { background:#3a0a0a; color:var(--red); border:1px solid var(--red); padding:6px 20px;
+             font-size:12px; letter-spacing:1px; }
+  #stopbtn:hover { box-shadow:0 0 12px var(--red); }
+  #stopbtn:disabled { opacity:.3; cursor:default; box-shadow:none; }
+</style>
+</head>
+<body>
+<h1>HERMES SHOW5 <span class="blink">▮</span> ADMIN CONSOLE
+  <span id="conn">CONN: <span class="dot" id="cdot"></span><span id="cstate">connecting</span></span>
+</h1>
+
+  <div class="aecpanel">
+    <div class="aec-title">◉ AEC // SUBTRACTION VIEW</div>
+    <div class="aec-row">
+      <div class="aec-cell"><div class="aec-label">RAW MIC (pre-AEC)</div><div class="aec-bar"><div class="aec-fill" id="aecrawfill"></div></div><div class="aec-val" id="aecrawval">-</div></div>
+      <div class="aec-cell"><div class="aec-label">OUTPUT (AEC'd)</div><div class="aec-bar"><div class="aec-fill" id="aecoutfill"></div></div><div class="aec-val" id="aecoutval">-</div></div>
+      <div class="aec-cell"><div class="aec-label">REFERENCE</div><div class="aec-bar"><div class="aec-fill" id="aecreffill"></div></div><div class="aec-val" id="aecrefval">-</div></div>
+    </div>
+    <div class="aec-sub" id="aecsub">BT: - | duck: - | the AEC cancels RAW - OUT</div>
+    <div class="aecpanel">
+    <div class="aec-title">◉ TUNING SLIDERS <button class="reset-all" onclick="resetAll()">RESET ALL</button></div>
+    <div class="sl-row" data-k="wake_th"><span class="sl-name">WAKE THRESHOLD</span><input type="range" id="sl-wake" min="0.1" max="0.9" step="0.05" value="0.45" oninput="setTune('wake_th', this.value, this)"><span class="sl-val" id="v-wake">0.45</span><button class="sl-reset" onclick="resetOne('wake_th')">⭯</button><div class="sl-needle" id="n-wake"></div><div class="sl-help">the ONNX wake probability gate — LOWER = wakes on quieter "hermes" (more false hits), HIGHER = stricter</div></div>
+    <div class="sl-row" data-k="talk_gate"><span class="sl-name">TALK GATE</span><input type="range" id="sl-talk" min="800" max="6000" step="100" value="2300" oninput="setTune('talk_gate', this.value, this)"><span class="sl-val" id="v-talk">2300</span><button class="sl-reset" onclick="resetOne('talk_gate')">⭯</button><div class="sl-needle" id="n-talk"></div><div class="sl-help">RMS that keeps an utterance alive — LOWER = longer utterances, HIGHER = ends sooner</div></div>
+    <div class="sl-row" data-k="vad_on"><span class="sl-name">VAD SENSITIVITY</span><input type="range" id="sl-vad" min="500" max="8000" step="100" value="2500" oninput="setTune('vad_on', this.value, this)"><span class="sl-val" id="v-vad">2500</span><button class="sl-reset" onclick="resetOne('vad_on')">⭯</button><div class="sl-needle" id="n-vad"></div><div class="sl-help">the speech-start RMS — LOWER = the video's audio starts "speech" (bad), HIGHER = only loud clear speech starts</div></div>
+    <div class="sl-row" data-k="sil_lo"><span class="sl-name">SILENCE (no wake)</span><input type="range" id="sl-silo" min="0.4" max="3" step="0.1" value="1.0" oninput="setTune('sil_lo', this.value, this)"><span class="sl-val" id="v-silo">1.0</span><button class="sl-reset" onclick="resetOne('sil_lo')">⭯</button><div class="sl-needle" id="n-silo"></div><div class="sl-help">seconds of quiet to end an utterance WITHOUT a wake</div></div>
+    <div class="sl-row" data-k="sil_wake"><span class="sl-name">SILENCE (after wake)</span><input type="range" id="sl-silw" min="1" max="5" step="0.25" value="2.5" oninput="setTune('sil_wake', this.value, this)"><span class="sl-val" id="v-silw">2.5</span><button class="sl-reset" onclick="resetOne('sil_wake')">⭯</button><div class="sl-needle" id="n-silw"></div><div class="sl-help">quiet after "hermes" — LONGER = your pauses survive</div></div>
+    <div class="sl-row" data-k="runaway"><span class="sl-name">MAX UTTERANCE</span><input type="range" id="sl-run" min="4" max="20" step="1" value="10" oninput="setTune('runaway', this.value*32000, this)"><span class="sl-val" id="v-run">10s</span><button class="sl-reset" onclick="resetOne('runaway')">⭯</button><div class="sl-needle" id="n-run"></div><div class="sl-help">the longest an utterance can run (seconds) before forced processing</div></div>
+    <div class="sl-row" data-k="prebuf"><span class="sl-name">WAKE PRE-ROLL</span><input type="range" id="sl-pre" min="0.2" max="2" step="0.1" value="1.0" oninput="setTune('prebuf', this.value*16000, this)"><span class="sl-val" id="v-pre">1.0s</span><button class="sl-reset" onclick="resetOne('prebuf')">⭯</button><div class="sl-needle" id="n-pre"></div><div class="sl-help">audio kept BEFORE the wake (the "hermes" itself) — more context for the STT</div></div>
+    <div class="sl-row" data-k="duck_ratio"><span class="sl-name">DUCK DEPTH</span><input type="range" id="sl-duck" min="2" max="10" step="1" value="4" oninput="setTune('duck_ratio', this.value, this)"><span class="sl-val" id="v-duck">4</span><button class="sl-reset" onclick="resetOne('duck_ratio')">⭯</button><div class="sl-needle" id="n-duck"></div><div class="sl-help">the music dip on the wake (media vol ÷ this)</div></div>
+    <div class="sl-row" data-k="mic_gain"><span class="sl-name">MIC GAIN</span><input type="range" id="sl-gain" min="4" max="128" step="4" value="32" oninput="setTune('mic_gain', this.value, this)"><span class="sl-val" id="v-gain">32</span><button class="sl-reset" onclick="resetOne('mic_gain')">⭯</button><div class="sl-needle" id="n-gain"></div><div class="sl-help">the app's mic amplification — HIGHER = louder to the STT (residual grows too)</div></div>
+  </div>
+<div class="grid">
+  <div class="panel">
+    <h2>◉ LIVE AUDIO — what the alexa hears</h2>
+    <div id="ear">▸ LISTEN LIVE</div>
+    <span id="rmsnum">rms 0</span>
+    <div id="meterwrap"><div id="meter"></div></div>
+    <canvas id="wave" width="900" height="110"></canvas>
+    <div id="feed"></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div class="panel">
+      <h2>◉ PIPELINE</h2>
+      <div id="statsline">🎙 <b id="s_mic">…</b> · wakes <b id="s_wakes">0</b> · utterances <b id="s_utt">0</b> ·
+        last latency <b id="s_lat">—</b>s · uptime <b id="s_up">—</b><br>
+        last heard: <b id="s_heard">—</b><br>
+        last answer: <b id="s_ans">—</b></div>
+    </div>
+    <div class="panel">
+      <h2>◉ DEVICE</h2>
+      <div class="kv" id="dev"></div>
+      <button id="refresh">⟳ REFRESH DEVICE</button>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="margin-top:12px">
+  <h2>◉ AGENT — hermes behind the voice
+    <span class="run-dot" id="runDot"></span>
+    <button id="stopbtn" disabled>■ STOP</button>
+  </h2>
+  <div id="agent"><span class="dim">waiting for the next utterance…</span></div>
+</div>
+
+<div class="panel" style="margin-top:12px">
+  <h2>◉ SERVER LOG</h2>
+  <div id="log"></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var ws, actx = null, earOn = false, q = [], rms = 0;
+  var feed = document.getElementById('feed');
+  var logEl = document.getElementById('log');
+  var canvas = document.getElementById('wave');
+  var ctx = canvas.getContext('2d');
+  var maxLines = 300;
+  var agentEl = document.getElementById('agent');
+  var runDot = document.getElementById('runDot');
+  var stopBtn = document.getElementById('stopbtn');
+  var curTool = null;
+
+  // ---------- websocket ----------
+  
+  
+  var DEFAULTS = {wake_th: 0.45, talk_gate: 2300, vad_on: 2500, sil_lo: 1.0, sil_wake: 2.5,
+                  runaway: 10, prebuf: 1.0, duck_ratio: 4, mic_gain: 32};
+  var SLMAP = {wake_th:'sl-wake', talk_gate:'sl-talk', vad_on:'sl-vad', sil_lo:'sl-silo', sil_wake:'sl-silw',
+               runaway:'sl-run', prebuf:'sl-pre', duck_ratio:'sl-duck', mic_gain:'sl-gain'};
+  var VKEY = {wake_th:'v-wake', talk_gate:'v-talk', vad_on:'v-vad', sil_lo:'v-silo', sil_wake:'v-silw',
+              runaway:'v-run', prebuf:'v-pre', duck_ratio:'v-duck', mic_gain:'v-gain'};
+  function resetOne(key) {
+    var d = DEFAULTS[key];
+    var sl = document.getElementById(SLMAP[key]);
+    if (!sl) return;
+    sl.value = d;
+    var v = document.getElementById(VKEY[key]);
+    if (v) v.textContent = (key === 'runaway' || key === 'prebuf') ? d + 's' : d;
+    setTune(key, (key === 'runaway' ? d*32000 : key === 'prebuf' ? d*16000 : d), sl);
+  }
+  function resetAll() { Object.keys(DEFAULTS).forEach(resetOne); }
+  function needle(key, val, min, max) {
+    var el = document.getElementById('n-' + key);
+    if (!el) return;
+    var pct = Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100));
+    el.style.left = pct + '%';
+    el.title = val;
+  }
+  function liveMarkers(m) {
+    if (!m) return;
+    needle('talk', m.rms, 800, 6000);
+    needle('vad', m.rms, 500, 8000);
+    needle('wake', m.wake_prob, 0.1, 0.9);
+    needle('silo', m.utt_len / 32000, 0.4, 3);
+    needle('silw', m.utt_len / 32000, 1, 5);
+    needle('run', m.utt_len / 32000, 4, 20);
+    needle('duck', m.vol, 0, 15);
+    needle('gain', m.rms, 0, 24000);
+  }
+function setTune(key, val, el) {
+    var v = document.getElementById('v-' + key.replace('_', ''));
+    if (v) v.textContent = val;
+    fetch('/admin/set', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({key: key, value: parseFloat(val)})}).catch(function(){});
+  }
+function connect() {
+    var proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    ws = new WebSocket(proto + location.host + '/admin/ws');
+    ws.binaryType = 'arraybuffer';
+    ws.onopen = function() {
+      document.getElementById('cdot').className = 'dot on';
+      document.getElementById('cstate').textContent = 'live';
+    };
+    ws.onclose = function() {
+      document.getElementById('cdot').className = 'dot';
+      document.getElementById('cstate').textContent = 'reconnecting…';
+      setTimeout(connect, 3000);
+    };
+    ws.onmessage = function(e) {
+      if (typeof e.data === 'string') { handleText(e.data); }
+      else { handlePcm(new Int16Array(e.data)); }
+    };
+  }
+  function handleText(s) {
+    var m; try { m = JSON.parse(s); } catch (err) { return; }
+    if (m.t === 'tail') {
+      logEl.innerHTML = '';
+      (m.lines || []).forEach(function(l) { addLog(l, false); });
+      logEl.scrollTop = logEl.scrollHeight;
+    } else if (m.t === 'log') { addLog(m.m, true); }
+    else if (m.t === 'rms') { setRms(m.v); }
+    
+    
+    else if (m.t === 'tune') {
+      var T = m.v || {};
+      var map = {wake_th:'sl-wake', talk_gate:'sl-talk', vad_on:'sl-vad', sil_lo:'sl-silo', sil_wake:'sl-silw',
+                 runaway:'sl-run', prebuf:'sl-pre', duck_ratio:'sl-duck', mic_gain:'sl-gain'};
+      var vmap = {wake_th:'v-wake', talk_gate:'v-talk', vad_on:'v-vad', sil_lo:'v-silo', sil_wake:'v-silw',
+                  runaway:'v-run', prebuf:'v-pre', duck_ratio:'v-duck', mic_gain:'v-gain'};
+      for (var k in map) {
+        if (T[k] === undefined) continue;
+        var sl = document.getElementById(map[k]);
+        var val = k === 'runaway' ? T[k]/32000 : k === 'prebuf' ? T[k]/16000 : T[k];
+        if (sl) sl.value = val;
+        var v = document.getElementById(vmap[k]);
+        if (v) v.textContent = (k === 'runaway' || k === 'prebuf') ? val + 's' : val;
+      }
+    }else if (m.t === 'aec') {
+      var ra = document.getElementById('aecrawfill'), ro = document.getElementById('aecoutfill'), rr = document.getElementById('aecreffill');
+      var va = document.getElementById('aecrawval'), vo = document.getElementById('aecoutval'), vr = document.getElementById('aecrefval');
+      var sub = document.getElementById('aecsub');
+      var max = 24000;
+      function bar(el, v) { if (!el) return; el.style.width = Math.min(100, (v / max) * 100) + '%'; }
+      bar(ra, m.raw); bar(ro, m.out); bar(rr, m.bt ? 9000 : 300);
+      if (va) va.textContent = m.raw >= 0 ? m.raw : 'n/a';
+      if (vo) vo.textContent = m.out;
+      if (vr) vr.textContent = m.bt ? (m.duck ? 'ducked' : 'BT on') : 'off';
+      liveMarkers(m.live);
+      if (sub) sub.textContent = 'BT: ' + (m.bt ? 'ON' : 'off') + ' | duck: ' + (m.duck ? 'ACTIVE' : 'no') + ' | the AEC cancels RAW - OUT (' + (m.raw >= 0 ? (m.raw - m.out) : '?') + ')';
+    }else if (m.t === 'stats') { setStats(m.s); }
+    else if (m.t === 'think') { setThink(m.m); }
+    else if (m.t === 'tool') { addTool(m.ev); }
+    else if (m.t === 'stopped') { agentStopped(); }
+    else if (m.t === 'answer') { setAnswer(m.m); }
+  }
+  function addLog(line, scroll) {
+    var d = document.createElement('div');
+    var cls = 'dim';
+    if (/WAKE WORD/.test(line)) cls = 'wake';
+    else if (/heard:/.test(line)) cls = 'you';
+    else if (/hermes:/.test(line)) cls = 'hermes';
+    else if (/err|TIMEOUT|fail/i.test(line)) cls = 'err';
+    d.className = cls;
+    d.textContent = line;
+    logEl.appendChild(d);
+    while (logEl.childNodes.length > 400) logEl.removeChild(logEl.firstChild);
+    if (scroll !== false) logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // ---------- AGENT panel ----------
+  function agentRun(on) {
+    runDot.className = on ? 'run-dot live' : 'run-dot';
+    stopBtn.disabled = !on;
+  }
+  function setThink(txt) {
+    if (!txt) return;
+    agentRun(true);
+    var ph = document.querySelector('#agent .dim');
+    if (ph) ph.remove();
+    var t = document.getElementById('thinkbox');
+    if (!t) {
+      t = document.createElement('div');
+      t.className = 'th';
+      t.id = 'thinkbox';
+      agentEl.appendChild(t);
+    }
+    t.textContent = '💭 ' + txt;
+    agentEl.scrollTop = agentEl.scrollHeight;
+  }
+  function addTool(ev) {
+    if (!ev) return;
+    agentRun(true);
+    var name = ev.tool || ev.name || 'tool';
+    var status = ev.status || '';
+    var div = document.createElement('div');
+    div.className = 'tl' + (status === 'running' || status === 'started' ? ' running' : ' done');
+    div.innerHTML = '<div class="tlh">🛠 ' + name + ' <span class="st">' + status + '</span></div>' +
+                    '<div class="tld"></div>';
+    var args = ev.args || ev.arguments;
+    if (args) {
+      var a = typeof args === 'string' ? args : JSON.stringify(args);
+      div.querySelector('.tld').textContent = a.length > 400 ? a.slice(0, 400) + '…' : a;
+    }
+    div.querySelector('.tlh').onclick = function() { div.classList.toggle('open'); };
+    if (curTool) curTool.classList.add('done');
+    agentEl.appendChild(div);
+    curTool = div;
+    agentEl.scrollTop = agentEl.scrollHeight;
+  }
+  function agentStopped() {
+    agentRun(false);
+    var d = document.createElement('div');
+    d.className = 'th';
+    d.style.color = 'var(--red)';
+    d.textContent = '⏹ agent stopped by user';
+    agentEl.appendChild(d);
+    agentEl.scrollTop = agentEl.scrollHeight;
+    curTool = null;
+  }
+  function setAnswer(txt) {
+    if (!txt) return;
+    agentRun(false);
+    var a = document.createElement('div');
+    a.className = 'ans';
+    a.textContent = '🗣 ' + txt;
+    agentEl.appendChild(a);
+    agentEl.scrollTop = agentEl.scrollHeight;
+    curTool = null;
+  }
+
+  // ---------- STOP button ----------
+  stopBtn.onclick = function() {
+    stopBtn.disabled = true;
+    stopBtn.textContent = '…';
+    fetch('/admin/stop', { method: 'POST' }).then(function(r) { return r.json(); })
+      .then(function(j) {
+        stopBtn.textContent = j.ok ? '■ STOP' : 'no run';
+        stopBtn.disabled = !j.ok;
+      }).catch(function() {
+        stopBtn.textContent = '■ STOP';
+        stopBtn.disabled = false;
+      });
+  };
+
+  // ---------- audio ----------
+  function handlePcm(buf) {
+    if (earOn) {
+      if (actx && actx.state === 'suspended') actx.resume();
+      var src = actx.createBufferSource();
+      var ab = actx.createBuffer(1, buf.length, 16000);
+      ab.copyToChannel(buf, 0);
+      src.buffer = ab;
+      src.connect(actx.destination);
+      q.push(src);
+      if (q.length > 40) { var old = q.shift(); try { old.stop(); } catch (e) {} }
+      src.onended = function() { var i = q.indexOf(src); if (i >= 0) q.splice(i, 1); };
+      src.start();
+    }
+    drawWave(buf);   // the waveform draws ALWAYS (the ear only gates the audio)
+  }
+  function setRms(v) {
+    rms = v;
+    document.getElementById('rmsnum').textContent = 'rms ' + v;
+    var m = document.getElementById('meter');
+    var pct = Math.min(100, Math.round(100 * v / 32767));
+    m.style.width = pct + '%';
+  }
+  function drawWave(buf) {
+    var w = canvas.width, h = canvas.height;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#00ed3f'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (var i = 0; i < w; i++) {
+      var idx = Math.floor(i / w * buf.length);
+      var v = (buf[idx] || 0) / 32767;
+      var y = h / 2 - v * (h / 2 - 4);
+      if (i === 0) ctx.moveTo(i, y); else ctx.lineTo(i, y);
+    }
+    ctx.stroke();
+  }
+  function setStats(s) {
+    if (!s) return;
+    document.getElementById('s_mic').textContent = s.mic_peak !== undefined ? s.mic_peak : (s.last_mic ? 'ok' : '…');
+    document.getElementById('s_wakes').textContent = s.wakes || 0;
+    document.getElementById('s_utt').textContent = s.utterances || 0;
+    document.getElementById('s_lat').textContent = s.last_latency ? s.last_latency.toFixed(1) : '—';
+    document.getElementById('s_up').textContent = s.uptime ? s.uptime : '—';
+    if (s.last_heard) document.getElementById('s_heard').textContent = s.last_heard;
+    if (s.last_answer) document.getElementById('s_ans').textContent = s.last_answer;
+  }
+  document.getElementById('refresh').onclick = function() {
+    fetch('/admin/device').then(function(r) { return r.json(); })
+      .then(function(d) { renderDev(d); });
+  };
+  function renderDev(d) {
+    var el = document.getElementById('dev');
+    el.innerHTML = '';
+    Object.keys(d || {}).forEach(function(k) {
+      var b = document.createElement('b'); b.textContent = k + ':';
+      var s = document.createElement('span'); s.textContent = d[k];
+      el.appendChild(b); el.appendChild(s);
+    });
+  }
+  connect();
+  setInterval(function() { fetch('/admin/stats').then(function(r) { return r.json(); }).then(setStats); }, 10000);
+  fetch('/admin/device').then(function(r) { return r.json(); }).then(renderDev);
+})();
+</script>
+</body>
+</html>
