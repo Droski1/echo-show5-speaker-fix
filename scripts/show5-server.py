@@ -640,6 +640,7 @@ async def voice_channel(reader, writer):
                             ADMIN.discard(w)
                 except Exception:
                     pass
+            STATS["last_rms"] = rms   # live out-RMS for the admin (per-chunk!)
             if rms > peak:
                 peak = rms
             if now - last_log > 2.0 and peak > 0:      # mic-level debug
@@ -1054,7 +1055,7 @@ async def _aec_sampler():
                     ["bash", "-c",
                      "timeout 2 ~/platform-tools/adb -s G6G1MK082254031J shell "
                      "'tinycap /data/local/tmp/aecraw.wav -D 0 -d 8 -c 1 -r 16000 -b 16 -T 1 2>/dev/null; "
-                     "cat /data/local/tmp/aecraw.wav' 2>/dev/null | tail -c 32000"],
+                     "cat /data/local/tmp/aecraw.wav' 2>/dev/null | tail -c 16000"],
                     capture_output=True, timeout=6).stdout)
             if len(r) > 44:
                 pcm = r[44:]
@@ -1079,7 +1080,7 @@ async def _aec_sampler():
                     pass
         except Exception:
             pass
-        await asyncio.sleep(2)
+        await asyncio.sleep(0.5)
 
 async def main():
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
