@@ -83,3 +83,27 @@ ALWAYS run the ONNX on the utterance, ignoring `_WOKE`.
 ## The next fix (in progress)
 1. The wake-gate: always-run the ONNX (drop the `_WOKE` check).
 2. Verify the music-mode duck (the app's btMusic detection + the volume write).
+
+
+## The admin panel: the full AEC cockpit (2026-09-01, same session)
+- **AEC subtraction view**: RAW mic (tinycap dev 8, pre-AEC) vs OUTPUT (the app's
+  stream, the AEC'd) vs REFERENCE (BT + the duck state) — live bars, every 2s.
+- **NINE tuning sliders** (live-adjustable via POST /admin/set, pushed to the app):
+  wake threshold, talk gate, VAD sensitivity, silence (no-wake), silence (after
+  wake), max utterance, wake pre-roll, duck depth, mic gain. Each has a per-slider
+  reset (⭯) + a RESET ALL.
+- **Live-responsive needles**: the sliders show the real-time data (the RMS rides
+  the talk/vad sliders, the wake-prob rides the wake slider, the utterance length
+  rides the silence sliders, the media volume rides the duck slider).
+- **The waveform**: streams the VAD-path PCM continuously (the LISTEN toggle only
+  gates the audible monitor, not the drawing).
+- **Slider sync**: the server pushes the current tunables on the admin's WS connect,
+  so a refresh shows the device's ACTUAL settings (no more phantom defaults).
+
+## The current voice-loop state (21:02, measured)
+- The wake-gate: ALWAYS runs the ONNX (the _WOKE bypass is dead) — the video's
+  speech gets `skip: no wake` and is never transcribed.
+- The AEC engine + the echo reference live (the handler + the EchoRef thread).
+- The music-mode duck rides the BT stream at ~25% (the A2DP's absolute volume).
+- The residual video-speech still leaks into the mic at ~14k-21k peaks (the AEC's
+  reference alignment) — the wake-gate + the duck + the sliders are the defenses.
