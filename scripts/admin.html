@@ -314,6 +314,12 @@ function connect() {
     agentRun(true);
     var name = ev.tool || ev.name || 'tool';
     var status = ev.status || '';
+    // the approval state -> the ORANGE dot (the user asked for it back!)
+    if (/approval|await|pending|confirm/i.test(status) || ev.approval || ev.requires_approval) {
+      runDot.className = 'run-dot approval';
+    } else if (status === 'completed' || status === 'done') {
+      runDot.className = 'run-dot live';
+    }
     var div = document.createElement('div');
     div.className = 'tl' + (status === 'running' || status === 'started' ? ' running' : ' done');
     div.innerHTML = '<div class="tlh">🛠 ' + name + ' <span class="st">' + status + '</span></div>' +
@@ -429,4 +435,5 @@ function connect() {
 })();
 </script>
 </body>
-</html>
+</html>  .run-dot.approval { background: var(--orange) !important; box-shadow: 0 0 12px var(--orange); animation: pulse 1s step-start infinite; }
+

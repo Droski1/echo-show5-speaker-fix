@@ -417,8 +417,12 @@ def handle_utterance(pcm):
     engine_woke = _WOKE
     _WOKE = False
     _LAST_WAKE = (engine_woke, is_wake)
-    if not is_wake and not _KW_ARMED and not engine_woke:
-        return [], None                     # only answer when the wake word was heard
+    if not is_wake and not _KW_ARMED:
+        # 2026-09-01 WAKE-ONLY: the engine's _WOKE flag alone is NOT sufficient —
+        # the ONNX false-positives on the video's audio (e.g. "hermes"-like sounds)
+        # used to answer the video's speech. The STT-verified "hermes" in the text
+        # (is_wake) is the ONLY gate to the answer path now.
+        return [], None                     # only answer when the text-verified wake was heard
     query = rest if rest else (text if engine_woke else ("hello" if not _KW_ARMED else text))
     events = [("state", "listen"), ("log", "you: " + (query if query else text))]
     think_parts, tool_list = [], []
